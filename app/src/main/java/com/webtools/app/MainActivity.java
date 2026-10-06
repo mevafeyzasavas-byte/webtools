@@ -34,6 +34,8 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // Google, "; wv" içeren WebView kimliğini OAuth'ta reddeder (disallowed_useragent).
+        s.setUserAgentString(s.getUserAgentString().replace("; wv", "").replace("Version/4.0 ", ""));
         CookieManager cm = CookieManager.getInstance();
         cm.setAcceptCookie(true);
         cm.setAcceptThirdPartyCookies(web, true);
@@ -45,7 +47,12 @@ public class MainActivity extends Activity {
                 // Aynı siteyse uygulama içinde aç, dış bağlantıları tarayıcıya ver.
                 if (!r.isForMainFrame()) return false;
                 Uri u = r.getUrl();
-                if (host != null && host.equals(u.getHost())) return false;
+                String h = u.getHost();
+                if (host != null && host.equals(h)) return false;
+                if ("notdefteri-phi.vercel.app".equals(h)) return false;
+                // Google/Firebase giriş sayfaları WebView içinde kalmalı; tarayıcıya gidersek
+                // giriş dönüşünde "missing initial state" hatası oluşur.
+                if (isAuthHost(h)) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) {}
                 return true;
             }
@@ -83,17 +90,24 @@ public class MainActivity extends Activity {
         if (b != null) web.restoreState(b); else web.loadUrl(home);
     }
 
+    private static boolean isAuthHost(String h) {
+        if (h == null) return false;
+        return h.equals("accounts.google.com") || h.endsWith(".firebaseapp.com")
+            || h.endsWith(".web.app") || h.equals("apis.google.com")
+            || h.endsWith(".googleapis.com") || h.endsWith(".gstatic.com");
+    }
+
     @Override
     protected void onSaveInstanceState(Bundle o) { super.onSaveInstanceState(o); web.saveState(o); }
 
     @Override
     public void onBackPressed() {
         if (customView != null) { web.getWebChromeClient().onHideCustomView(); return; }
-        // Geçmişte gezinme yok: modal açıksa kapat, değilse uygulamadan çık.
+        // Modal açıksa kapat; değilse geçmişte geri git (ör. Not Defteri'nden araçlara), yoksa çık.
         web.evaluateJavascript(
             "(function(){var m=document.getElementById('modal');"
             + "if(m&&m.classList.contains('show')){document.getElementById('closeBtn').click();return 1;}return 0;})()",
-            v -> { if (!"1".equals(v)) finish(); });
+            v -> { if (!"1".equals(v)) { if (web.canGoBack()) web.goBack(); else finish(); } });
     }
 
     @Override protected void onPause() { super.onPause(); web.onPause(); CookieManager.getInstance().flush(); }
