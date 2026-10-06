@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Message;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
@@ -13,14 +14,10 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
-import android.widget.Toast;
-import android.webkit.SslErrorHandler;
-import android.net.http.SslError;
-import android.webkit.WebResourceResponse;
-import android.graphics.Bitmap;
 
 public class MainActivity extends Activity {
     private WebView web;
+    private WebView popup;
     private FrameLayout root;
     private View customView;
     private WebChromeClient.CustomViewCallback customCallback;
@@ -39,6 +36,9 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // Firebase signInWithPopup için gerçek popup penceresi gerekir.
+        s.setSupportMultipleWindows(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
         // Google, "; wv" içeren WebView kimliğini OAuth'ta reddeder (disallowed_useragent).
         s.setUserAgentString(s.getUserAgentString().replace("; wv", "").replace("Version/4.0 ", ""));
         CookieManager cm = CookieManager.getInstance();
@@ -61,25 +61,9 @@ public class MainActivity extends Activity {
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) {}
                 return true;
             }
-            // --- TEŞHİS: giriş sırasında hangi adreste takıldığını göstermek için (sorun çözülünce silinebilir) ---
-            @Override
-            public void onPageStarted(WebView v, String url, Bitmap f) {
-                Toast.makeText(MainActivity.this, "Açılıyor: " + url, Toast.LENGTH_LONG).show();
-            }
-            @Override
-            public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
-                h.cancel();
-                Toast.makeText(MainActivity.this, "SSL hatası: " + e.getUrl(), Toast.LENGTH_LONG).show();
-            }
-            @Override
-            public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) {
-                if (r.isForMainFrame())
-                    Toast.makeText(MainActivity.this, "HTTP " + e.getStatusCode() + ": " + r.getUrl(), Toast.LENGTH_LONG).show();
-            }
             @Override
             public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
                 if (r.isForMainFrame()) {
-                    Toast.makeText(MainActivity.this, "Hata: " + e.getDescription() + " " + r.getUrl(), Toast.LENGTH_LONG).show();
                     v.loadDataWithBaseURL(null,
                         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                         + "<body style='font-family:sans-serif;text-align:center;padding:30vh 24px 0;color:#0a1628'>"
@@ -90,6 +74,28 @@ public class MainActivity extends Activity {
             }
         });
         web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView v, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                final WebView pop = new WebView(MainActivity.this);
+                WebSettings ps = pop.getSettings();
+                ps.setJavaScriptEnabled(true);
+                ps.setDomStorageEnabled(true);
+                ps.setUserAgentString(web.getSettings().getUserAgentString());
+                CookieManager.getInstance().setAcceptThirdPartyCookies(pop, true);
+                pop.setWebViewClient(new WebViewClient());
+                pop.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onCloseWindow(WebView w) { closePopup(); }
+                });
+                root.addView(pop, new FrameLayout.LayoutParams(-1, -1));
+                popup = pop;
+                WebView.WebViewTransport t = (WebView.WebViewTransport) resultMsg.obj;
+                t.setWebView(pop);
+                resultMsg.sendToTarget();
+                return true;
+            }
+            @Override
+            public void onCloseWindow(WebView w) { closePopup(); }
             @Override
             public void onShowCustomView(View v, CustomViewCallback cb) {
                 customView = v; customCallback = cb;
@@ -111,6 +117,13 @@ public class MainActivity extends Activity {
         if (b != null) web.restoreState(b); else web.loadUrl(home);
     }
 
+    private void closePopup() {
+        if (popup == null) return;
+        root.removeView(popup);
+        popup.destroy();
+        popup = null;
+    }
+
     private static boolean isAuthHost(String h) {
         if (h == null) return false;
         return h.equals("accounts.google.com") || h.endsWith(".firebaseapp.com")
@@ -123,6 +136,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (popup != null) { closePopup(); return; }
         if (customView != null) { web.getWebChromeClient().onHideCustomView(); return; }
         // Modal açıksa kapat; değilse geçmişte geri git (ör. Not Defteri'nden araçlara), yoksa çık.
         web.evaluateJavascript(
