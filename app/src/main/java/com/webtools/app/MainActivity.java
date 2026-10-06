@@ -13,6 +13,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.Toast;
+import android.webkit.SslErrorHandler;
+import android.net.http.SslError;
+import android.webkit.WebResourceResponse;
+import android.graphics.Bitmap;
 
 public class MainActivity extends Activity {
     private WebView web;
@@ -56,9 +61,25 @@ public class MainActivity extends Activity {
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception e) {}
                 return true;
             }
+            // --- TEŞHİS: giriş sırasında hangi adreste takıldığını göstermek için (sorun çözülünce silinebilir) ---
+            @Override
+            public void onPageStarted(WebView v, String url, Bitmap f) {
+                Toast.makeText(MainActivity.this, "Açılıyor: " + url, Toast.LENGTH_LONG).show();
+            }
+            @Override
+            public void onReceivedSslError(WebView v, SslErrorHandler h, SslError e) {
+                h.cancel();
+                Toast.makeText(MainActivity.this, "SSL hatası: " + e.getUrl(), Toast.LENGTH_LONG).show();
+            }
+            @Override
+            public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse e) {
+                if (r.isForMainFrame())
+                    Toast.makeText(MainActivity.this, "HTTP " + e.getStatusCode() + ": " + r.getUrl(), Toast.LENGTH_LONG).show();
+            }
             @Override
             public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
                 if (r.isForMainFrame()) {
+                    Toast.makeText(MainActivity.this, "Hata: " + e.getDescription() + " " + r.getUrl(), Toast.LENGTH_LONG).show();
                     v.loadDataWithBaseURL(null,
                         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                         + "<body style='font-family:sans-serif;text-align:center;padding:30vh 24px 0;color:#0a1628'>"
