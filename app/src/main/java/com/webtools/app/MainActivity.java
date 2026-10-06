@@ -117,6 +117,14 @@ public class MainActivity extends Activity {
         if (b != null) web.restoreState(b); else web.loadUrl(home);
     }
 
+    private boolean isHome(String url) {
+        if (url == null) return true;
+        Uri a = Uri.parse(url), b = Uri.parse(home);
+        String pa = a.getPath() == null ? "" : a.getPath().replaceAll("/+$", "");
+        String pb = b.getPath() == null ? "" : b.getPath().replaceAll("/+$", "");
+        return a.getHost() != null && a.getHost().equals(b.getHost()) && pa.equals(pb);
+    }
+
     private void closePopup() {
         if (popup == null) return;
         root.removeView(popup);
@@ -142,7 +150,11 @@ public class MainActivity extends Activity {
         web.evaluateJavascript(
             "(function(){var m=document.getElementById('modal');"
             + "if(m&&m.classList.contains('show')){document.getElementById('closeBtn').click();return 1;}return 0;})()",
-            v -> { if (!"1".equals(v)) { if (web.canGoBack()) web.goBack(); else finish(); } });
+            v -> {
+                if ("1".equals(v)) return;
+                // Ana sayfadaysak (iframe geçmişi birikmiş olsa bile) tek geri ile çık.
+                if (isHome(web.getUrl()) || !web.canGoBack()) finish(); else web.goBack();
+            });
     }
 
     @Override protected void onPause() { super.onPause(); web.onPause(); CookieManager.getInstance().flush(); }
