@@ -89,7 +89,11 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (customView != null) { web.getWebChromeClient().onHideCustomView(); return; }
-        if (web.canGoBack()) web.goBack(); else super.onBackPressed();
+        // Geçmişte gezinme yok: modal açıksa kapat, değilse uygulamadan çık.
+        web.evaluateJavascript(
+            "(function(){var m=document.getElementById('modal');"
+            + "if(m&&m.classList.contains('show')){document.getElementById('closeBtn').click();return 1;}return 0;})()",
+            v -> { if (!"1".equals(v)) finish(); });
     }
 
     @Override protected void onPause() { super.onPause(); web.onPause(); CookieManager.getInstance().flush(); }
