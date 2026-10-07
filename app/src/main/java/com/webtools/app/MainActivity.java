@@ -146,14 +146,17 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (popup != null) { closePopup(); return; }
         if (customView != null) { web.getWebChromeClient().onHideCustomView(); return; }
-        // Modal açıksa kapat; değilse geçmişte geri git (ör. Not Defteri'nden araçlara), yoksa çık.
+        // 1) Modal açıksa kapat. 2) Araçlar ana sayfasındaysak (adresi karşılaştırmadan,
+        // sayfadaki öğelere bakarak) tek geri ile çık. 3) Başka sayfadaysak (ör. Not Defteri)
+        // geçmişte geri git; geri gidilecek yer yoksa çık.
         web.evaluateJavascript(
             "(function(){var m=document.getElementById('modal');"
-            + "if(m&&m.classList.contains('show')){document.getElementById('closeBtn').click();return 1;}return 0;})()",
+            + "if(m&&m.classList.contains('show')){var c=document.getElementById('closeBtn');if(c)c.click();return 1;}"
+            + "if(m&&document.getElementById('apps'))return 2;"
+            + "return 0;})()",
             v -> {
                 if ("1".equals(v)) return;
-                // Ana sayfadaysak (iframe geçmişi birikmiş olsa bile) tek geri ile çık.
-                if (isHome(web.getUrl()) || !web.canGoBack()) finish(); else web.goBack();
+                if ("2".equals(v) || isHome(web.getUrl()) || !web.canGoBack()) finish(); else web.goBack();
             });
     }
 
